@@ -71,7 +71,7 @@ export default function MessagesPage() {
 
   return (
     <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Customer Messages</h1>
+      <h1 className="text-3xl font-bold mb-6 text-blue-600">Customer Messages</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Messages List */}
@@ -93,7 +93,7 @@ export default function MessagesPage() {
                     selectedMessage?.id === message.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                   }`}
                 >
-                  <td className="px-6 py-4">{message.customerName}</td>
+                  <td className="px-6 py-4 text-gray-900">{message.customerName}</td>
                   <td className="px-6 py-4 italic text-gray-600">"{message.message}"</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -114,21 +114,21 @@ export default function MessagesPage() {
         <div className="bg-white rounded-lg shadow-md p-6">
           {selectedMessage ? (
             <>
-              <h2 className="text-xl font-bold mb-4">Reply to {selectedMessage.customerName}</h2>
+              <h2 className="text-xl font-bold mb-4 text-gray-900">Reply to {selectedMessage.customerName}</h2>
               
               <div className="mb-4 p-4 bg-gray-50 rounded">
-                <p className="text-sm text-gray-600">Original Message:</p>
-                <p className="italic">"{selectedMessage.message}"</p>
+                <p className="text-sm font-bold text-gray-900">Original Message:</p>
+                <p className="italic text-gray-500">"{selectedMessage.message}"</p>
               </div>
               
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                className="w-full p-3 border rounded mb-4"
+                className="w-full p-3 border rounded mb-4 text-gray-900"
                 rows={4}
                 placeholder="Type your reply here..."
               />
-              
+  
               <div className="flex gap-2">
                 <button
                   onClick={handleReply}

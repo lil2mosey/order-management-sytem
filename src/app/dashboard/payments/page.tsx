@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import MpesaPaymentModal from './components/mpesapaymentmodal';
 import { 
   CreditCard, 
   Download, 
@@ -15,49 +16,67 @@ import {
   DollarSign,
   TrendingUp,
   Filter,
-  X
+  X,
+  Clock,
+  Smartphone,
+  AlertCircle,
+  CheckCircle,
+  Package
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-// Define the Payment interface based on your actual data structure
-interface Payment {
+// Define the Order interface based on your actual data structure
+export interface Order {
   id: string;
   orderId: string;
+  customerId: string;
   customerName: string;
+  item: string;
+  itemId?: string; // Add this field to link to inventory
+  quantity: number;
   amount: number;
-  method: 'M-Pesa' | 'Cash' | 'Bank' | string;
-  date: any; // Firestore timestamp
-  status?: string;
+  price?: number;
+  payment: 'Paid' | 'Unpaid';
+  status: string;
+  createdAt: any;
+  mpesaReceipt?: string;
+  phoneNumber?: string;
 }
-
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalRevenue, setTotalRevenue] = useState(0);
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [pendingRevenue, setPendingRevenue] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [methodFilter, setMethodFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
+  
+  // M-Pesa modal state
+  const [isMpesaModalOpen, setIsMpesaModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
 
   useEffect(() => {
-    fetchPayments();
+    fetchOrders();
   }, []);
 
   // Apply filters
   useEffect(() => {
-    let filtered = [...payments];
+    let filtered = [...orders];
 
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(payment => 
-        payment.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(order => 
+        order.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.item?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Apply method filter
-    if (methodFilter !== 'all') {
-      filtered = filtered.filter(payment => payment.method === methodFilter);
+    // Apply payment filter
+    if (paymentFilter !== 'all') {
+      filtered = filtered.filter(order => order.payment === paymentFilter);
     }
 
     // Apply date filter
@@ -67,65 +86,86 @@ export default function PaymentsPage() {
       const thisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      filtered = filtered.filter(payment => {
-        const paymentDate = formatDateObject(payment.date);
-        if (!paymentDate) return false;
+      filtered = filtered.filter(order => {
+        const orderDate = formatDateObject(order.createdAt);
+        if (!orderDate) return false;
 
         switch(dateFilter) {
           case 'today':
-            return paymentDate >= today;
+            return orderDate >= today;
           case 'week':
-            return paymentDate >= thisWeek;
+            return orderDate >= thisWeek;
           case 'month':
-            return paymentDate >= thisMonth;
+            return orderDate >= thisMonth;
           default:
             return true;
         }
       });
     }
 
-    setFilteredPayments(filtered);
+    setFilteredOrders(filtered);
     
-    // Recalculate total for filtered payments
-    const filteredTotal = filtered.reduce((sum, p) => sum + (p.amount || 0), 0);
-    setTotalRevenue(filteredTotal);
-  }, [searchTerm, methodFilter, dateFilter, payments]);
+    // Recalculate totals
+    const paidTotal = filtered
+      .filter(o => o.payment === 'Paid')
+      .reduce((sum, o) => sum + (o.amount || 0), 0);
+    setTotalRevenue(paidTotal);
+    
+    const unpaidTotal = filtered
+      .filter(o => o.payment === 'Unpaid')
+      .reduce((sum, o) => sum + (o.amount || 0), 0);
+    setPendingRevenue(unpaidTotal);
+    
+  }, [searchTerm, paymentFilter, dateFilter, orders]);
 
-  const fetchPayments = async () => {
+  const fetchOrders = async () => {
     try {
       setLoading(true);
       
-      // Create query with ordering
-      const paymentsQuery = query(
-        collection(db, 'payments'),
-        orderBy('date', 'desc')
+      // Fetch orders sorted by date
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        orderBy('createdAt', 'desc')
       );
       
-      const querySnapshot = await getDocs(paymentsQuery);
-      console.log('Payments found:', querySnapshot.size);
+      const querySnapshot = await getDocs(ordersQuery);
+      console.log('Orders found:', querySnapshot.size);
       
-      const paymentsData = querySnapshot.docs.map(doc => {
+      const ordersData = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        console.log('Payment data:', data);
-        
         return {
           id: doc.id,
           orderId: data.orderId || 'N/A',
+          customerId: data.customerId || '',
           customerName: data.customerName || 'Unknown',
           amount: data.amount || 0,
-          method: data.method || 'Cash',
-          date: data.date || new Date(),
-          status: data.status || 'Completed'
-        } as Payment;
+          price: data.price || 0,
+          quantity: data.quantity || 1,
+          item: data.item || 'Unknown Item',
+          payment: data.payment || 'Unpaid',
+          status: data.status || 'Pending',
+          createdAt: data.createdAt || new Date(),
+          mpesaReceipt: data.mpesaReceipt || '',
+          phoneNumber: data.phoneNumber || ''
+        } as Order;
       });
       
-      setPayments(paymentsData);
-      setFilteredPayments(paymentsData);
+      setOrders(ordersData);
+      setFilteredOrders(ordersData);
       
-      const total = paymentsData.reduce((sum, p) => sum + (p.amount || 0), 0);
-      setTotalRevenue(total);
+      const paidTotal = ordersData
+        .filter(o => o.payment === 'Paid')
+        .reduce((sum, o) => sum + (o.amount || 0), 0);
+      setTotalRevenue(paidTotal);
+      
+      const unpaidTotal = ordersData
+        .filter(o => o.payment === 'Unpaid')
+        .reduce((sum, o) => sum + (o.amount || 0), 0);
+      setPendingRevenue(unpaidTotal);
+      
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error fetching orders:', error);
+      toast.error('Failed to load orders');
     } finally {
       setLoading(false);
     }
@@ -136,30 +176,32 @@ export default function PaymentsPage() {
     if (!timestamp) return 'N/A';
     
     try {
-      // Handle Firestore timestamp
       if (timestamp?.toDate) {
         return timestamp.toDate().toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
-          day: 'numeric'
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
         });
       }
-      // Handle regular Date object
       if (timestamp instanceof Date) {
         return timestamp.toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
-          day: 'numeric'
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
         });
       }
-      // Handle string or number
       return new Date(timestamp).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch (error) {
-      console.error('Error formatting date:', error);
       return 'Invalid Date';
     }
   };
@@ -181,15 +223,51 @@ export default function PaymentsPage() {
     }
   };
 
-  const handlePrintReceipt = (payment: Payment) => {
-    setSelectedPayment(payment);
+  const handleInitiateMpesaPayment = (order: Order) => {
+    setSelectedOrderForPayment(order);
+    setIsMpesaModalOpen(true);
+  };
+
+  const handleMpesaSuccess = async (response: any) => {
+    // Refresh the orders list
+    await fetchOrders();
+    
+    toast.success(
+      <div className="flex flex-col">
+        <span className="font-bold">✓ STK Push Sent!</span>
+        <span className="text-sm">Please check your phone to complete the payment</span>
+      </div>,
+      { duration: 6000 }
+    );
+  };
+
+  const handleMarkAsPaid = async (order: Order) => {
+    try {
+      // Update order in Firestore
+      const orderRef = doc(db, 'orders', order.id);
+      await updateDoc(orderRef, {
+        payment: 'Paid',
+        status: 'Completed',
+        updatedAt: new Date()
+      });
+      
+      toast.success('Order marked as paid successfully');
+      fetchOrders(); // Refresh the list
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast.error('Failed to update order');
+    }
+  };
+
+  const handlePrintReceipt = (order: Order) => {
+    setSelectedOrder(order);
     
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Receipt - Order #${payment.orderId}</title>
+            <title>Receipt - Order #${order.orderId}</title>
             <style>
               body { 
                 font-family: 'Arial', sans-serif; 
@@ -221,7 +299,7 @@ export default function PaymentsPage() {
               .row { 
                 display: flex; 
                 justify-content: space-between; 
-                margin: 15px 0;
+                margin: 10px 0;
                 padding: 5px 0;
                 border-bottom: 1px dashed #ccc;
               }
@@ -234,39 +312,81 @@ export default function PaymentsPage() {
                 border-top: 2px solid #000;
                 padding-top: 15px;
               }
-              .method-badge {
-                background: #e0e0e0;
+              .status-badge {
+                display: inline-block;
                 padding: 4px 12px;
                 border-radius: 20px;
                 font-size: 12px;
                 font-weight: bold;
               }
+              .status-paid {
+                background: #d4edda;
+                color: #155724;
+              }
+              .status-unpaid {
+                background: #fff3cd;
+                color: #856404;
+              }
+              .item-details {
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 15px 0;
+              }
             </style>
           </head>
           <body>
             <div class="receipt">
-              <h1>PAYMENT RECEIPT</h1>
+              <h1>${order.payment === 'Paid' ? 'PAYMENT RECEIPT' : 'ORDER INVOICE'}</h1>
+              
+              <div class="item-details">
+                <div class="row">
+                  <strong>Item:</strong> 
+                  <span>${order.item}</span>
+                </div>
+                <div class="row">
+                  <strong>Quantity:</strong> 
+                  <span>${order.quantity}</span>
+                </div>
+                <div class="row">
+                  <strong>Unit Price:</strong> 
+                  <span>KES ${order.price?.toLocaleString() || 'N/A'}</span>
+                </div>
+              </div>
+              
               <div class="details">
                 <div class="row">
                   <strong>Order ID:</strong> 
-                  <span>${payment.orderId}</span>
+                  <span>${order.orderId}</span>
                 </div>
                 <div class="row">
                   <strong>Customer:</strong> 
-                  <span>${payment.customerName}</span>
+                  <span>${order.customerName}</span>
                 </div>
                 <div class="row">
-                  <strong>Amount:</strong> 
-                  <span style="font-size: 20px; font-weight: bold; color: #2e7d32;">KES ${payment.amount.toLocaleString()}</span>
+                  <strong>Total Amount:</strong> 
+                  <span style="font-size: 20px; font-weight: bold; color: #2e7d32;">KES ${order.amount.toLocaleString()}</span>
                 </div>
                 <div class="row">
-                  <strong>Method:</strong> 
-                  <span class="method-badge">${payment.method}</span>
+                  <strong>Payment Status:</strong> 
+                  <span class="status-badge ${order.payment === 'Paid' ? 'status-paid' : 'status-unpaid'}">
+                    ${order.payment}
+                  </span>
+                </div>
+                <div class="row">
+                  <strong>Order Status:</strong> 
+                  <span>${order.status}</span>
                 </div>
                 <div class="row">
                   <strong>Date:</strong> 
-                  <span>${formatDate(payment.date)}</span>
+                  <span>${formatDate(order.createdAt)}</span>
                 </div>
+                ${order.mpesaReceipt ? `
+                <div class="row">
+                  <strong>M-PESA Receipt:</strong> 
+                  <span>${order.mpesaReceipt}</span>
+                </div>
+                ` : ''}
               </div>
               <div class="footer">
                 <p>Thank you for your business!</p>
@@ -279,7 +399,6 @@ export default function PaymentsPage() {
       printWindow.document.close();
       printWindow.focus();
       
-      // Small delay to ensure content is loaded
       setTimeout(() => {
         printWindow.print();
       }, 250);
@@ -288,14 +407,17 @@ export default function PaymentsPage() {
 
   const handleExportCSV = () => {
     try {
-      const headers = ['Order ID', 'Customer', 'Amount (KES)', 'Method', 'Date', 'Status'];
-      const csvData = filteredPayments.map(p => [
-        p.orderId,
-        p.customerName,
-        p.amount,
-        p.method,
-        formatDate(p.date),
-        p.status || 'Completed'
+      const headers = ['Order ID', 'Customer', 'Item', 'Quantity', 'Amount (KES)', 'Payment Status', 'Order Status', 'Date', 'M-PESA Receipt'];
+      const csvData = filteredOrders.map(o => [
+        o.orderId,
+        o.customerName,
+        o.item,
+        o.quantity,
+        o.amount,
+        o.payment,
+        o.status,
+        formatDate(o.createdAt),
+        o.mpesaReceipt || ''
       ]);
       
       const csv = [headers, ...csvData].map(row => row.join(',')).join('\n');
@@ -306,19 +428,20 @@ export default function PaymentsPage() {
       a.download = `payments_export_${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
+      
+      toast.success('Export successful!');
     } catch (error) {
       console.error('Error exporting CSV:', error);
+      toast.error('Failed to export data');
     }
   };
 
-  const getMethodColor = (method: string) => {
-    switch(method.toLowerCase()) {
-      case 'm-pesa':
+  const getPaymentStatusColor = (payment: string) => {
+    switch(payment) {
+      case 'Paid':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'cash':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'bank':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'Unpaid':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -326,7 +449,7 @@ export default function PaymentsPage() {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setMethodFilter('all');
+    setPaymentFilter('all');
     setDateFilter('all');
   };
 
@@ -334,21 +457,89 @@ export default function PaymentsPage() {
     return <LoadingSpinner />;
   }
 
-  // Get unique payment methods for filter
-  const paymentMethods = ['all', ...new Set(payments.map(p => p.method))];
+  // Get unique values for filters
+  const paymentStatuses = ['all', ...new Set(orders.map(o => o.payment))];
 
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto px-4 max-w-7xl">
+        {/* M-Pesa Modal */}
+        <MpesaPaymentModal
+          isOpen={isMpesaModalOpen}
+          onClose={() => {
+            setIsMpesaModalOpen(false);
+            setSelectedOrderForPayment(null);
+          }}
+          order={selectedOrderForPayment}
+          onSuccess={handleMpesaSuccess}
+        />
+
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-black">Payment Management</h1>
-            <p className="text-black mt-1">Track and manage all payment transactions</p>
+            <p className="text-black mt-1">Track and manage all order payments</p>
           </div>
-          <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-sm">
-            <span className="text-sm font-medium block">Total Revenue</span>
-            <span className="text-2xl font-bold">KES {totalRevenue.toLocaleString()}</span>
+          <div className="flex gap-3">
+            <div className="bg-yellow-600 text-white px-6 py-3 rounded-lg shadow-sm">
+              <span className="text-sm font-medium block">Pending Revenue</span>
+              <span className="text-2xl font-bold">KES {pendingRevenue.toLocaleString()}</span>
+            </div>
+            <div className="bg-green-600 text-white px-6 py-3 rounded-lg shadow-sm">
+              <span className="text-sm font-medium block">Total Revenue</span>
+              <span className="text-2xl font-bold">KES {totalRevenue.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Total Orders</p>
+                <p className="text-2xl font-bold text-black">{orders.length}</p>
+              </div>
+              <Package className="h-8 w-8 text-blue-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Paid Orders</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {orders.filter(o => o.payment === 'Paid').length}
+                </p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Unpaid Orders</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {orders.filter(o => o.payment === 'Unpaid').length}
+                </p>
+              </div>
+              <Clock className="h-8 w-8 text-yellow-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Avg Order Value</p>
+                <p className="text-2xl font-bold text-black">
+                  KES {orders.length > 0 
+                    ? Math.round(orders.reduce((sum, o) => sum + o.amount, 0) / orders.length).toLocaleString() 
+                    : 0}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-purple-500" />
+            </div>
           </div>
         </div>
 
@@ -357,30 +548,31 @@ export default function PaymentsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Search */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-black mb-2">Search Payments</label>
+              <label className="block text-sm font-medium text-black mb-2">Search Orders</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-black" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by Order ID or Customer..."
+                  placeholder="Search by Order ID, Customer or Item..."
                   className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-black"
                 />
               </div>
             </div>
 
-            {/* Method Filter */}
+            {/* Payment Filter */}
             <div>
-              <label className="block text-sm font-medium text-black mb-2">Payment Method</label>
+              <label className="block text-sm font-medium text-black mb-2">Payment Status</label>
               <select
-                value={methodFilter}
-                onChange={(e) => setMethodFilter(e.target.value)}
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value)}
                 className="w-full p-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-black"
+                aria-label="Payment Status Filter"
               >
-                {paymentMethods.map(method => (
-                  <option key={method} value={method}>
-                    {method === 'all' ? 'All Methods' : method}
+                {paymentStatuses.map(status => (
+                  <option key={status} value={status}>
+                    {status === 'all' ? 'All Status' : status}
                   </option>
                 ))}
               </select>
@@ -393,6 +585,7 @@ export default function PaymentsPage() {
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
                 className="w-full p-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-black"
+                aria-label="Date Range Filter"
               >
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
@@ -403,7 +596,7 @@ export default function PaymentsPage() {
           </div>
 
           {/* Active Filters */}
-          {(searchTerm || methodFilter !== 'all' || dateFilter !== 'all') && (
+          {(searchTerm || paymentFilter !== 'all' || dateFilter !== 'all') && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-black">Active Filters:</span>
@@ -413,16 +606,18 @@ export default function PaymentsPage() {
                     <button onClick={() => setSearchTerm('')} className="ml-1 hover:text-blue-900">×</button>
                   </span>
                 )}
-                {methodFilter !== 'all' && (
-                  <span className="bg-purple-100 text-black px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-purple-200">
-                    Method: {methodFilter}
-                    <button onClick={() => setMethodFilter('all')} className="ml-1 hover:text-purple-900">×</button>
+                {paymentFilter !== 'all' && (
+                  <span className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 border ${
+                    paymentFilter === 'Paid' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  }`}>
+                    Status: {paymentFilter}
+                    <button onClick={() => setPaymentFilter('all')} className="ml-1 hover:text-opacity-75">×</button>
                   </span>
                 )}
                 {dateFilter !== 'all' && (
-                  <span className="bg-green-100 text-black px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-green-200">
+                  <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-purple-200">
                     Date: {dateFilter}
-                    <button onClick={() => setDateFilter('all')} className="ml-1 hover:text-green-900">×</button>
+                    <button onClick={() => setDateFilter('all')} className="ml-1 hover:text-purple-900">×</button>
                   </span>
                 )}
                 <button 
@@ -436,47 +631,8 @@ export default function PaymentsPage() {
             </div>
           )}
         </div>
-
-        {/* Stats Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <p className="text-xs text-black mb-1">Total Transactions</p>
-            <p className="text-2xl font-bold text-black">{filteredPayments.length}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <p className="text-xs text-black mb-1">Average Payment</p>
-            <p className="text-2xl font-bold text-black">
-              KES {filteredPayments.length > 0 
-                ? Math.round(totalRevenue / filteredPayments.length).toLocaleString() 
-                : 0}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <p className="text-xs text-black mb-1">Highest Payment</p>
-            <p className="text-2xl font-bold text-black">
-              KES {filteredPayments.length > 0 
-                ? Math.max(...filteredPayments.map(p => p.amount)).toLocaleString() 
-                : 0}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <p className="text-xs text-black mb-1">This Month</p>
-            <p className="text-2xl font-bold text-black">
-              KES {filteredPayments
-                .filter(p => {
-                  const date = formatDateObject(p.date);
-                  if (!date) return false;
-                  const now = new Date();
-                  return date.getMonth() === now.getMonth() && 
-                         date.getFullYear() === now.getFullYear();
-                })
-                .reduce((sum, p) => sum + p.amount, 0)
-                .toLocaleString()}
-            </p>
-          </div>
-        </div>
         
-        {/* Payments Table */}
+        {/* Orders/Payments Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -496,6 +652,15 @@ export default function PaymentsPage() {
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
                     <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Item
+                    </div>
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                    Qty
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
                       Amount
                     </div>
@@ -503,8 +668,11 @@ export default function PaymentsPage() {
                   <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <CreditCard className="h-4 w-4" />
-                      Method
+                      Payment
                     </div>
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                    Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
                     <div className="flex items-center gap-2">
@@ -518,51 +686,102 @@ export default function PaymentsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPayments.length === 0 ? (
+                {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
-                      <CreditCard className="h-12 w-12 text-black mx-auto mb-3" />
-                      <p className="text-black font-medium">No payments found</p>
-                      <p className="text-sm text-black mt-1">
-                        {payments.length > 0 
-                          ? 'No payments match your filters' 
-                          : 'No payment records available'}
+                    <td colSpan={9} className="px-6 py-12 text-center">
+                      <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-black font-medium">No orders found</p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {orders.length > 0 
+                          ? 'No orders match your filters' 
+                          : 'No orders available'}
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  filteredPayments.map((payment) => (
+                  filteredOrders.map((order) => (
                     <tr 
-                      key={payment.id}
+                      key={order.id}
                       className={`hover:bg-gray-50 cursor-pointer transition-colors ${
-                        selectedPayment?.id === payment.id ? 'bg-blue-50' : ''
-                      }`}
-                      onClick={() => setSelectedPayment(payment)}
+                        selectedOrder?.id === order.id ? 'bg-blue-50' : ''
+                      } ${order.payment === 'Unpaid' ? 'bg-yellow-50/30' : ''}`}
+                      onClick={() => setSelectedOrder(order)}
                     >
                       <td className="px-6 py-4">
-                        <span className="font-medium text-black">#{payment.orderId}</span>
-                      </td>
-                      <td className="px-6 py-4 text-black">{payment.customerName}</td>
-                      <td className="px-6 py-4">
-                        <span className="font-bold text-black">KES {payment.amount.toLocaleString()}</span>
+                        <span className="font-medium text-black">#{order.orderId}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getMethodColor(payment.method)}`}>
-                          {payment.method}
+                        <div>
+                          <div className="font-medium text-black">{order.customerName}</div>
+                          <div className="text-xs text-gray-500">{order.customerId?.slice(0, 8)}...</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="text-black">{order.item}</div>
+                          {order.price && (
+                            <div className="text-xs text-gray-500">@ KES {order.price}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-black">{order.quantity}</td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-black">KES {order.amount.toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPaymentStatusColor(order.payment)}`}>
+                          {order.payment}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-black">{formatDate(payment.date)}</td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePrintReceipt(payment);
-                          }}
-                          className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                        >
-                          <Printer className="h-4 w-4" />
-                          Print
-                        </button>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                          order.status === 'Completed' 
+                            ? 'bg-green-100 text-green-800 border-green-200' 
+                            : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                        }`}>
+                          {order.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-black text-sm">
+                        {formatDate(order.createdAt)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          {order.payment === 'Unpaid' && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInitiateMpesaPayment(order);
+                                }}
+                                className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1 text-sm"
+                              >
+                                <Smartphone className="h-4 w-4" />
+                                M-PESA
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMarkAsPaid(order);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-sm"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                                Mark Paid
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrintReceipt(order);
+                            }}
+                            className="text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 text-sm"
+                          >
+                            <Printer className="h-4 w-4" />
+                            Print
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -575,7 +794,12 @@ export default function PaymentsPage() {
         {/* Footer with Export and Summary */}
         <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-sm text-black">
-            Showing {filteredPayments.length} of {payments.length} payments
+            Showing {filteredOrders.length} of {orders.length} orders
+            {pendingRevenue > 0 && (
+              <span className="ml-2 text-yellow-600 font-medium">
+                (KES {pendingRevenue.toLocaleString()} pending)
+              </span>
+            )}
           </div>
           <div className="flex gap-3">
             <button
@@ -588,48 +812,13 @@ export default function PaymentsPage() {
             <button
               onClick={handleExportCSV}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2 shadow-sm"
-              disabled={filteredPayments.length === 0}
+              disabled={filteredOrders.length === 0}
             >
               <Download className="h-4 w-4" />
               Export CSV
             </button>
           </div>
         </div>
-
-        {/* Payment Methods Summary */}
-        {filteredPayments.length > 0 && (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            {paymentMethods.filter(m => m !== 'all').map(method => {
-              const methodPayments = filteredPayments.filter(p => p.method === method);
-              const methodTotal = methodPayments.reduce((sum, p) => sum + p.amount, 0);
-              const methodCount = methodPayments.length;
-              
-              if (methodCount === 0) return null;
-              
-              return (
-                <div key={method} className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-medium text-black">{method}</p>
-                      <p className="text-xs text-black mt-1">{methodCount} transactions</p>
-                    </div>
-                    <span className="text-lg font-bold text-black">
-                      KES {methodTotal.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-600 rounded-full"
-                      style={{ 
-                        width: `${totalRevenue > 0 ? (methodTotal / totalRevenue) * 100 : 0}%` 
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
     </div>
   );

@@ -141,14 +141,14 @@ export default function DashboardPage() {
   const quickActions = [
     {
       title: 'New Order',
-      href: '/dashboard/orders/new',
+      href: '/dashboard/orders',
       icon: PlusCircle,
       color: 'bg-blue-600',
       hoverColor: 'hover:bg-blue-700'
     },
     {
       title: 'Add Stock',
-      href: '/dashboard/inventory/add',
+      href: '/dashboard/inventory',
       icon: Package,
       color: 'bg-green-600',
       hoverColor: 'hover:bg-green-700'
@@ -306,12 +306,12 @@ export default function DashboardPage() {
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               Order Status Breakdown
             </h3>
-            <div className="space-y-3">
+              <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div 
-                    className="bg-green-500 h-2 rounded-full" 
-                    style={{ width: `${stats.totalOrders > 0 ? (stats.completedOrders / stats.totalOrders) * 100 : 0}%` }}
+                    className="bg-green-500 h-2 rounded-full transition-all"
+                    data-width={stats.totalOrders > 0 ? (stats.completedOrders / stats.totalOrders) * 100 : 0}
                   ></div>
                 </div>
                 <span className="text-xs text-black min-w-[60px]">
@@ -319,10 +319,10 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div 
-                    className="bg-yellow-500 h-2 rounded-full" 
-                    style={{ width: `${stats.totalOrders > 0 ? (stats.pendingOrders / stats.totalOrders) * 100 : 0}%` }}
+                    className="bg-yellow-500 h-2 rounded-full transition-all"
+                    data-width={stats.totalOrders > 0 ? (stats.pendingOrders / stats.totalOrders) * 100 : 0}
                   ></div>
                 </div>
                 <span className="text-xs text-black min-w-[60px]">
@@ -337,12 +337,12 @@ export default function DashboardPage() {
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               Inventory Status
             </h3>
-            <div className="space-y-3">
+              <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div 
-                    className="bg-blue-500 h-2 rounded-full" 
-                    style={{ width: `${stats.lowStock > 0 ? 100 : 0}%` }}
+                    className="bg-blue-500 h-2 rounded-full transition-all"
+                    data-width={stats.lowStock > 0 ? 100 : 0}
                   ></div>
                 </div>
                 <span className="text-xs text-black min-w-[60px]">

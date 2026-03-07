@@ -66,44 +66,34 @@ export default function CustomerNewOrderPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      const orderId = 'ORD' + Math.floor(100 + Math.random() * 900).toString();
-      
-      const order = {
-        orderId,
-        customerId: user?.uid,
-        customerName: user?.name,
-        item: formData.item,
-        quantity: formData.quantity,
-        price: formData.price,
-        status: 'Pending' as const,
-        payment: 'Unpaid' as const,
-        amount: formData.amount,
-        createdAt: new Date()
-      };
+  try {
+    const orderId = 'ORD' + Math.floor(100 + Math.random() * 900).toString();
+    
+    const order = {
+      orderId,
+      customerId: user?.uid,
+      item: formData.item,
+      quantity: formData.quantity,
+      status: 'Pending' as const,
+      payment: 'Unpaid' as const,
+      amount: formData.amount,
+      price: selectedItem?.price || 0,
+      createdAt: new Date()
+    };
 
-      await addDoc(collection(db, 'orders'), order);
-      
-      // Send notification message to seller
-      await addDoc(collection(db, 'messages'), {
-        customerId: user?.uid,
-        customerName: user?.name,
-        message: `New order placed: ${formData.item} x ${formData.quantity} - KES ${formData.amount}`,
-        status: 'Unreplied',
-        createdAt: new Date()
-      });
-      
-      toast.success('Order placed successfully!');
-      router.push('/customer');
-    } catch (error) {
-      toast.error('Error placing order');
-    } finally {
-      setLoading(false);
-    }
-  };
+    await addDoc(collection(db, 'orders'), order);
+    
+    toast.success('Order created successfully!');
+    router.push('/dashboard/orders');
+  } catch (error) {
+    toast.error('Error creating order');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -119,6 +109,7 @@ export default function CustomerNewOrderPage() {
                 value={formData.item}
                 onChange={(e) => handleItemChange(e.target.value)}
                 className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-gray-800 bg-white"
+                aria-label="Select an item"
                 required
               >
                 <option value="" className="text-gray-400">Choose an item</option>
@@ -139,6 +130,7 @@ export default function CustomerNewOrderPage() {
                 className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-gray-800"
                 min="1"
                 max={selectedItem?.quantity || 99}
+                placeholder="Enter quantity"
                 required
               />
               {selectedItem && (

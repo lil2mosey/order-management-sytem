@@ -74,10 +74,10 @@ export default function OrdersPage() {
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Order Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Order Management</h1>
         <button 
           onClick={() => window.location.href = '/dashboard/orders/new'}
-          className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700"
+          className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900"
         >
           New Order
         </button>
@@ -99,10 +99,10 @@ export default function OrdersPage() {
           <tbody className="divide-y divide-gray-200">
             {orders.map((order) => (
               <tr key={order.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">{order.orderId}</td>
-                <td className="px-6 py-4">{order.customerName}</td>
-                <td className="px-6 py-4">{order.item}</td>
-                <td className="px-6 py-4">{order.quantity}</td>
+                <td className="px-6 py-4 text-gray-900">{order.orderId}</td>
+                <td className="px-6 py-4 text-gray-900">{order.customerName}</td>
+                <td className="px-6 py-4 text-gray-900">{order.item}</td>
+                <td className="px-6 py-4 text-gray-900">{order.quantity}</td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded text-xs font-semibold ${
                     order.status === 'Done' 
@@ -141,24 +141,26 @@ export default function OrdersPage() {
       {showModal && selectedOrder && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg w-96">
-            <h3 className="text-xl font-bold mb-4">Edit Order</h3>
+            <h3 className="text-xl font-bold mb-4 text-gray-700">Edit Order</h3>
             
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Customer Name</label>
+            <div className="mb-4 text-gray-700">
+              <label className="block text-sm font-medium mb-2 text-gray-700">Customer Name</label>
               <input
                 type="text"
+                aria-label="Customer name text-gray-700"
                 value={selectedOrder.customerName}
                 onChange={(e) => setSelectedOrder({...selectedOrder, customerName: e.target.value})}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded text-gray-700"
               />
             </div>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Status</label>
+              <label className="block text-sm font-medium mb-2 text-gray-700">Status</label>
               <select
+                aria-label="Order status"
                 value={selectedOrder.status}
                 onChange={(e) => setSelectedOrder({...selectedOrder, status: e.target.value as 'Pending' | 'Done'})}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded text-gray-700"
               >
                 <option value="Pending">Pending</option>
                 <option value="Done">Done</option>
@@ -166,14 +168,15 @@ export default function OrdersPage() {
             </div>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Payment</label>
+              <label className="block text-sm font-medium mb-2 text-gray-700">Payment</label>
               <select
+                aria-label="Order payment status"
                 value={selectedOrder.payment}
                 onChange={(e) => setSelectedOrder({...selectedOrder, payment: e.target.value as 'Paid' | 'Unpaid'})}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded text-gray-700"
               >
-                <option value="Paid">Paid</option>
-                <option value="Unpaid">Unpaid</option>
+                <option value="Paid text-gray-900">Paid</option>
+                <option value="Unpaid text-gray-900">Unpaid</option>
               </select>
             </div>
             
@@ -186,7 +189,7 @@ export default function OrdersPage() {
               </button>
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-200 py-2 rounded hover:bg-gray-300"
+                className="flex-1 bg-gray-800 py-2 rounded hover:bg-gray-700"
               >
                 Cancel
               </button>
