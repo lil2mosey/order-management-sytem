@@ -1,3 +1,4 @@
+// User Types
 export type UserRole = 'customer' | 'seller';
 
 export interface User {
@@ -5,7 +6,26 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  phone?: string;
+  address?: string;
   createdAt: Date;
+  updatedAt?: Date;
+  lastLogin?: Date;
+}
+
+// Order Types
+export type OrderStatus = 'Pending' | 'Processing' | 'Completed' | 'Cancelled' | 'Refunded';
+export type PaymentStatus = 'Paid' | 'Unpaid' | 'Refunded' | 'Partially Paid';
+export type PaymentMethod = 'M-Pesa' | 'Cash' | 'Bank Transfer' | 'Card' | 'Mobile Money';
+
+export interface OrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  subtotal: number;
+  discount?: number;
+  tax?: number;
 }
 
 export interface Order {
@@ -13,87 +33,135 @@ export interface Order {
   orderId: string;
   customerId: string;
   customerName: string;
-  item: string;
-  itemId: string; // Added: Reference to inventory item
-  quantity: number;
-  status: 'Pending' | 'Processing' | 'Completed' | 'Cancelled'; // Updated: More status options
-  payment: 'Paid' | 'Unpaid' | 'Refunded'; // Updated: Added Refunded
-  amount: number;
-  price: number; // Added: Unit price at time of order
-  totalAmount: number; // Added: quantity * price
+  customerEmail?: string;
+  customerPhone?: string;
+  items: OrderItem[];
+  itemCount: number;
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  discount?: number;
+  totalAmount: number;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  transactionId?: string;
+  mpesaReceipt?: string;
+  shippingAddress?: string;
+  billingAddress?: string;
+  notes?: string;
   createdAt: Date;
-  updatedAt?: Date; // Added: Track when order was last updated
-  completedAt?: Date; // Added: Track when order was completed
-  paymentMethod?: 'M-Pesa' | 'Cash' | 'Bank'; // Added: Payment method used
-  mpesaReceipt?: string; // Added: M-PESA receipt number if paid via M-PESA
-  notes?: string; // Added: Additional order notes
+  updatedAt: Date;
+  completedAt?: Date;
+  cancelledAt?: Date;
+  refundedAt?: Date;
 }
+
+// Inventory Types
+export type InventoryStatus = 'Ok' | 'Low' | 'Critical' | 'Out of Stock';
 
 export interface InventoryItem {
   id: string;
   name: string;
-  description?: string; // Added: Item description
+  description?: string;
+  sku?: string;
+  barcode?: string;
   quantity: number;
-  price: number; // Current price
-  cost?: number; // Added: Cost price for profit calculation
-  status: 'Ok' | 'Low' | 'Critical' | 'Out of Stock'; // Updated: More status options
-  lowStockThreshold: number; // Made required, not optional
-  criticalStockThreshold?: number; // Added: Threshold for critical stock
-  category?: string; // Added: Item category
-  supplier?: string; // Added: Supplier information
-  location?: string; // Added: Storage location
-  lastRestocked?: Date; // Added: Last restock date
+  price: number;
+  cost?: number;
+  status: InventoryStatus;
+  lowStockThreshold: number;
+  criticalStockThreshold?: number;
+  category?: string;
+  supplier?: string;
+  supplierContact?: string;
+  location?: string;
+  imageUrl?: string;
+  lastRestocked?: Date;
+  lastSold?: Date;
   createdAt: Date;
   updatedAt: Date;
-  totalValue: number; // Added: quantity * price (computed)
+  totalValue: number; // quantity * price
+  profit?: number; // (price - cost) * quantity
 }
+
+// Inventory Transaction Types
+export type InventoryTransactionType = 'restock' | 'sale' | 'adjustment' | 'return' | 'damage' | 'transfer';
+
+export interface InventoryTransaction {
+  id: string;
+  itemId: string;
+  itemName: string;
+  type: InventoryTransactionType;
+  quantity: number; // Positive for restock, negative for sale/damage
+  previousQuantity: number;
+  newQuantity: number;
+  referenceId?: string; // Order ID if from sale, PO ID if from restock
+  referenceType?: 'order' | 'purchase' | 'manual' | 'return';
+  notes?: string;
+  createdBy?: string;
+  createdAt: Date;
+}
+
+// Message Types
+export type MessageStatus = 'Unreplied' | 'Replied' | 'Archived';
 
 export interface Message {
   id: string;
   customerId: string;
   customerName: string;
-  customerEmail?: string; // Added: Customer email for replies
+  customerEmail?: string;
+  customerPhone?: string;
   message: string;
-  status: 'Unreplied' | 'Replied' | 'Archived'; // Updated: Added Archived
+  status: MessageStatus;
   reply?: string;
-  repliedAt?: Date; // Added: When reply was sent
-  createdAt: Date;
-}
-
-export interface Payment {
-  id: string;
-  orderId: string;
-  order?: Partial<Order>; // Added: Reference to order details
-  customerId: string;
-  customerName: string;
-  amount: number;
-  method: 'M-Pesa' | 'Cash' | 'Bank Transfer' | 'Card'; // Updated: More payment methods
-  status: 'Pending' | 'Completed' | 'Failed' | 'Refunded'; // Added: Payment status
-  transactionId?: string; // Added: Transaction ID from payment gateway
-  mpesaReceipt?: string; // Added: M-PESA receipt number
-  phoneNumber?: string; // Added: Customer phone for M-PESA
-  paymentDate: Date; // Renamed from 'date' to be more specific
+  repliedAt?: Date;
+  repliedBy?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
 
-// New Interface: Inventory Transaction Log
-export interface InventoryTransaction {
+// Payment Types
+export type PaymentStatus_ = 'Pending' | 'Completed' | 'Failed' | 'Refunded';
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  order?: Partial<Order>;
+  customerId: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  amount: number;
+  method: PaymentMethod;
+  status: PaymentStatus_;
+  transactionId?: string;
+  mpesaReceipt?: string;
+  phoneNumber?: string;
+  paymentDate: Date;
+  notes?: string;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+// Stock Alert Types
+export type StockAlertType = 'low' | 'critical' | 'out';
+export type StockAlertStatus = 'active' | 'resolved' | 'ignored';
+
+export interface StockAlert {
   id: string;
   itemId: string;
   itemName: string;
-  type: 'restock' | 'sale' | 'adjustment' | 'return' | 'damage'; // Type of transaction
-  quantity: number; // Positive for restock, negative for sale/damage
-  previousQuantity: number;
-  newQuantity: number;
-  referenceId?: string; // Order ID if from sale, PO ID if from restock
-  referenceType?: 'order' | 'purchase' | 'manual';
-  notes?: string;
-  createdBy?: string; // User who performed the transaction
+  currentQuantity: number;
+  threshold: number;
+  type: StockAlertType;
+  status: StockAlertStatus;
   createdAt: Date;
+  resolvedAt?: Date;
+  resolvedBy?: string;
 }
 
-// New Interface: Order Inventory Impact
+// Order Inventory Impact (for tracking stock changes)
 export interface OrderInventoryImpact {
   orderId: string;
   items: Array<{
@@ -102,20 +170,71 @@ export interface OrderInventoryImpact {
     quantity: number;
     previousStock: number;
     newStock: number;
+    price: number;
+    subtotal: number;
   }>;
-  totalImpact: number; // Total number of items deducted
+  totalImpact: number;
+  totalValue: number;
   timestamp: Date;
 }
 
-// New Interface: Stock Alert
-export interface StockAlert {
-  id: string;
-  itemId: string;
-  itemName: string;
-  currentQuantity: number;
-  threshold: number;
-  type: 'low' | 'critical' | 'out';
-  status: 'active' | 'resolved' | 'ignored';
-  createdAt: Date;
-  resolvedAt?: Date;
+// Dashboard Stats Type
+export interface DashboardStats {
+  totalOrders: number;
+  pendingOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  totalRevenue: number;
+  totalProfit?: number;
+  lowStockItems: number;
+  criticalStockItems: number;
+  outOfStockItems: number;
+  unreadMessages: number;
+  recentOrders: Order[];
+  topSellingItems?: Array<{
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    revenue: number;
+  }>;
+}
+
+// Customer Dashboard Stats
+export interface CustomerStats {
+  totalOrders: number;
+  pendingOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  totalSpent: number;
+  recentOrders: Order[];
+}
+
+// API Response Types
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+// Filter Types
+export interface OrderFilters {
+  status?: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  customerId?: string;
+  startDate?: Date;
+  endDate?: Date;
+  search?: string;
+  minAmount?: number;
+  maxAmount?: number;
+}
+
+export interface InventoryFilters {
+  status?: InventoryStatus;
+  category?: string;
+  supplier?: string;
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  lowStock?: boolean;
 }

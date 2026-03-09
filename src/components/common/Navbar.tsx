@@ -17,36 +17,65 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-gray-800 text-white p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href={user.role === 'seller' ? '/dashboard' : '/customer'} className="text-xl font-bold">
-          OMS Dashboard
-        </Link>
-        
-        <div className="flex items-center gap-6">
-          {user.role === 'seller' ? (
-            <>
-              <Link href="/dashboard" className="hover:text-gray-300">Dashboard</Link>
-              <Link href="/dashboard/orders" className="hover:text-gray-300">Orders</Link>
-              <Link href="/dashboard/inventory" className="hover:text-gray-300">Inventory</Link>
-              <Link href="/dashboard/messages" className="hover:text-gray-300">Messages</Link>
-              <Link href="/dashboard/payments" className="hover:text-gray-300">Payments</Link>
-            </>
-          ) : (
-            <>
-              <Link href="/customer" className="hover:text-gray-300">Dashboard</Link>
-              <Link href="/customer/orders" className="hover:text-gray-300">My Orders</Link>
-            </>
-          )}
+    <nav className="shadow-lg" style={{ backgroundColor: '#061E29' }}>
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex justify-between items-center">
+          {/* Logo/Brand */}
+          <Link 
+            href={user.role === 'seller' ? '/dashboard' : '/customer'} 
+            className="text-xl font-bold"
+            style={{ color: '#F3F4F4' }}
+          >
+            OMS Dashboard
+          </Link>
           
-          <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-600">
-            <span className="text-sm">{user.name} ({user.role})</span>
-            <button 
-              onClick={handleLogout}
-              className="bg-red-600 px-3 py-1 rounded text-sm hover:bg-red-700"
-            >
-              Logout
-            </button>
+          {/* Navigation Links */}
+          <div className="flex items-center gap-6">
+            {user.role === 'seller' ? (
+              <>
+                <Link href="/dashboard" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  Dashboard
+                </Link>
+                <Link href="/dashboard/orders" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  Orders
+                </Link>
+                <Link href="/dashboard/inventory" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  Inventory
+                </Link>
+                <Link href="/dashboard/messages" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  Messages
+                </Link>
+                <Link href="/dashboard/payments" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  Payments
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/customer" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  Dashboard
+                </Link>
+                <Link href="/customer/orders" className="transition-colors duration-200 hover:text-[#5F9598]" style={{ color: '#F3F4F4' }}>
+                  My Orders
+                </Link>
+              </>
+            )}
+            
+            {/* User Info & Logout */}
+            <div className="flex items-center gap-4 ml-4 pl-4 border-l" style={{ borderColor: '#1D546D' }}>
+              <span className="text-sm" style={{ color: '#F3F4F4' }}>
+                {user.name} 
+                <span className="ml-1 text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#1D546D', color: '#F3F4F4' }}>
+                  {user.role}
+                </span>
+              </span>
+              <button 
+                onClick={handleLogout}
+                className="px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 hover:opacity-90"
+                style={{ backgroundColor: '#5F9598', color: '#F3F4F4' }}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>

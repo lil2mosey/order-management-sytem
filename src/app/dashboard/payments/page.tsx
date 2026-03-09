@@ -21,9 +21,11 @@ import {
   Smartphone,
   AlertCircle,
   CheckCircle,
-  Package
+  Package,
+  ArrowUpDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/context/AuthContext';
 
 // Define the Order interface based on your actual data structure
 export interface Order {
@@ -32,7 +34,7 @@ export interface Order {
   customerId: string;
   customerName: string;
   item: string;
-  itemId?: string; // Add this field to link to inventory
+  itemId?: string;
   quantity: number;
   amount: number;
   price?: number;
@@ -42,6 +44,7 @@ export interface Order {
   mpesaReceipt?: string;
   phoneNumber?: string;
 }
+
 export default function PaymentsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -52,16 +55,20 @@ export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
   // M-Pesa modal state
   const [isMpesaModalOpen, setIsMpesaModalOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
+  
+  const { processPaymentAndDeductStock } = useAuth();
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  // Apply filters
+  // Apply filters and sorting
   useEffect(() => {
     let filtered = [...orders];
 
@@ -103,6 +110,28 @@ export default function PaymentsPage() {
       });
     }
 
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any = a[sortField as keyof Order];
+      let bValue: any = b[sortField as keyof Order];
+
+      if (sortField === 'createdAt') {
+        aValue = formatDateObject(a.createdAt)?.getTime() || 0;
+        bValue = formatDateObject(b.createdAt)?.getTime() || 0;
+      }
+
+      if (sortField === 'amount') {
+        aValue = a.amount || 0;
+        bValue = b.amount || 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
     setFilteredOrders(filtered);
     
     // Recalculate totals
@@ -116,7 +145,7 @@ export default function PaymentsPage() {
       .reduce((sum, o) => sum + (o.amount || 0), 0);
     setPendingRevenue(unpaidTotal);
     
-  }, [searchTerm, paymentFilter, dateFilter, orders]);
+  }, [searchTerm, paymentFilter, dateFilter, sortField, sortDirection, orders]);
 
   const fetchOrders = async () => {
     try {
@@ -142,6 +171,7 @@ export default function PaymentsPage() {
           price: data.price || 0,
           quantity: data.quantity || 1,
           item: data.item || 'Unknown Item',
+          itemId: data.items?.[0]?.productId || data.itemId || '',
           payment: data.payment || 'Unpaid',
           status: data.status || 'Pending',
           createdAt: data.createdAt || new Date(),
@@ -234,28 +264,32 @@ export default function PaymentsPage() {
     
     toast.success(
       <div className="flex flex-col">
-        <span className="font-bold">✓ STK Push Sent!</span>
-        <span className="text-sm">Please check your phone to complete the payment</span>
+        <span className="font-bold">✓ Payment Successful!</span>
+        <span className="text-sm">Stock has been deducted from inventory</span>
       </div>,
-      { duration: 6000 }
+      { duration: 5000 }
     );
   };
 
   const handleMarkAsPaid = async (order: Order) => {
     try {
-      // Update order in Firestore
-      const orderRef = doc(db, 'orders', order.id);
-      await updateDoc(orderRef, {
-        payment: 'Paid',
-        status: 'Completed',
-        updatedAt: new Date()
-      });
+      // Process payment and deduct stock
+      await processPaymentAndDeductStock(
+        {
+          productId: order.itemId,
+          productName: order.item,
+          quantity: order.quantity,
+          price: order.price || order.amount / order.quantity,
+          amount: order.amount
+        },
+        'cash'
+      );
       
-      toast.success('Order marked as paid successfully');
+      toast.success('Order marked as paid and stock updated successfully');
       fetchOrders(); // Refresh the list
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating order:', error);
-      toast.error('Failed to update order');
+      toast.error(error.message || 'Failed to update order');
     }
   };
 
@@ -272,7 +306,7 @@ export default function PaymentsPage() {
               body { 
                 font-family: 'Arial', sans-serif; 
                 padding: 40px; 
-                background: #f5f5f5;
+                background: #F3F4F4;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -283,16 +317,16 @@ export default function PaymentsPage() {
                 max-width: 400px; 
                 margin: 0 auto; 
                 background: white;
-                border: 2px solid #333; 
+                border: 2px solid #061E29; 
                 padding: 30px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 12px rgba(6, 30, 41, 0.1);
               }
               h1 { 
                 text-align: center; 
-                color: #000;
+                color: #061E29;
                 font-size: 24px;
                 margin-bottom: 20px;
-                border-bottom: 2px solid #000;
+                border-bottom: 2px solid #1D546D;
                 padding-bottom: 10px;
               }
               .details { margin: 20px 0; }
@@ -301,15 +335,15 @@ export default function PaymentsPage() {
                 justify-content: space-between; 
                 margin: 10px 0;
                 padding: 5px 0;
-                border-bottom: 1px dashed #ccc;
+                border-bottom: 1px dashed #F3F4F4;
               }
-              .row strong { color: #333; }
+              .row strong { color: #1D546D; }
               .footer { 
                 margin-top: 30px; 
                 text-align: center; 
-                color: #000;
+                color: #061E29;
                 font-style: italic;
-                border-top: 2px solid #000;
+                border-top: 2px solid #5F9598;
                 padding-top: 15px;
               }
               .status-badge {
@@ -320,15 +354,15 @@ export default function PaymentsPage() {
                 font-weight: bold;
               }
               .status-paid {
-                background: #d4edda;
-                color: #155724;
+                background: #5F9598;
+                color: white;
               }
               .status-unpaid {
-                background: #fff3cd;
-                color: #856404;
+                background: #F3F4F4;
+                color: #1D546D;
               }
               .item-details {
-                background: #f8f9fa;
+                background: #F3F4F4;
                 padding: 15px;
                 border-radius: 8px;
                 margin: 15px 0;
@@ -342,30 +376,30 @@ export default function PaymentsPage() {
               <div class="item-details">
                 <div class="row">
                   <strong>Item:</strong> 
-                  <span>${order.item}</span>
+                  <span style="color: #061E29;">${order.item}</span>
                 </div>
                 <div class="row">
                   <strong>Quantity:</strong> 
-                  <span>${order.quantity}</span>
+                  <span style="color: #061E29;">${order.quantity}</span>
                 </div>
                 <div class="row">
                   <strong>Unit Price:</strong> 
-                  <span>KES ${order.price?.toLocaleString() || 'N/A'}</span>
+                  <span style="color: #061E29;">KES ${order.price?.toLocaleString() || 'N/A'}</span>
                 </div>
               </div>
               
               <div class="details">
                 <div class="row">
                   <strong>Order ID:</strong> 
-                  <span>${order.orderId}</span>
+                  <span style="color: #061E29;">${order.orderId}</span>
                 </div>
                 <div class="row">
                   <strong>Customer:</strong> 
-                  <span>${order.customerName}</span>
+                  <span style="color: #061E29;">${order.customerName}</span>
                 </div>
                 <div class="row">
                   <strong>Total Amount:</strong> 
-                  <span style="font-size: 20px; font-weight: bold; color: #2e7d32;">KES ${order.amount.toLocaleString()}</span>
+                  <span style="font-size: 20px; font-weight: bold; color: #5F9598;">KES ${order.amount.toLocaleString()}</span>
                 </div>
                 <div class="row">
                   <strong>Payment Status:</strong> 
@@ -375,16 +409,16 @@ export default function PaymentsPage() {
                 </div>
                 <div class="row">
                   <strong>Order Status:</strong> 
-                  <span>${order.status}</span>
+                  <span style="color: #061E29;">${order.status}</span>
                 </div>
                 <div class="row">
                   <strong>Date:</strong> 
-                  <span>${formatDate(order.createdAt)}</span>
+                  <span style="color: #061E29;">${formatDate(order.createdAt)}</span>
                 </div>
                 ${order.mpesaReceipt ? `
                 <div class="row">
                   <strong>M-PESA Receipt:</strong> 
-                  <span>${order.mpesaReceipt}</span>
+                  <span style="color: #061E29;">${order.mpesaReceipt}</span>
                 </div>
                 ` : ''}
               </div>
@@ -436,6 +470,15 @@ export default function PaymentsPage() {
     }
   };
 
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
   const getPaymentStatusColor = (payment: string) => {
     switch(payment) {
       case 'Paid':
@@ -461,7 +504,7 @@ export default function PaymentsPage() {
   const paymentStatuses = ['all', ...new Set(orders.map(o => o.payment))];
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
+    <div className="min-h-screen py-8" style={{ backgroundColor: '#F3F4F4' }}>
       <div className="container mx-auto px-4 max-w-7xl">
         {/* M-Pesa Modal */}
         <MpesaPaymentModal
@@ -475,100 +518,117 @@ export default function PaymentsPage() {
         />
 
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 fade-in">
           <div>
-            <h1 className="text-3xl font-bold text-black">Payment Management</h1>
-            <p className="text-black mt-1">Track and manage all order payments</p>
+            <h1 className="text-3xl font-bold" style={{ color: '#061E29' }}>Payment Management</h1>
+            <p className="mt-1" style={{ color: '#1D546D' }}>Track and manage all order payments</p>
           </div>
           <div className="flex gap-3">
-            <div className="bg-yellow-600 text-white px-6 py-3 rounded-lg shadow-sm">
-              <span className="text-sm font-medium block">Pending Revenue</span>
-              <span className="text-2xl font-bold">KES {pendingRevenue.toLocaleString()}</span>
+            <div className="px-6 py-3 rounded-lg shadow-lg" style={{ backgroundColor: '#1D546D' }}>
+              <span className="text-sm font-medium block" style={{ color: '#F3F4F4' }}>Pending Revenue</span>
+              <span className="text-2xl font-bold" style={{ color: '#F3F4F4' }}>KES {pendingRevenue.toLocaleString()}</span>
             </div>
-            <div className="bg-green-600 text-white px-6 py-3 rounded-lg shadow-sm">
-              <span className="text-sm font-medium block">Total Revenue</span>
-              <span className="text-2xl font-bold">KES {totalRevenue.toLocaleString()}</span>
+            <div className="px-6 py-3 rounded-lg shadow-lg" style={{ backgroundColor: '#061E29' }}>
+              <span className="text-sm font-medium block" style={{ color: '#F3F4F4' }}>Total Revenue</span>
+              <span className="text-2xl font-bold" style={{ color: '#F3F4F4' }}>KES {totalRevenue.toLocaleString()}</span>
             </div>
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 fade-in">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600 mb-1">Total Orders</p>
-                <p className="text-2xl font-bold text-black">{orders.length}</p>
+                <p className="text-sm font-medium" style={{ color: '#1D546D' }}>Total Orders</p>
+                <p className="text-2xl font-bold mt-2" style={{ color: '#061E29' }}>{orders.length}</p>
               </div>
-              <Package className="h-8 w-8 text-blue-500" />
+              <div className="p-3 rounded-full" style={{ backgroundColor: 'rgba(6, 30, 41, 0.1)' }}>
+                <Package className="h-6 w-6" style={{ color: '#061E29' }} />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600 mb-1">Paid Orders</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-sm font-medium" style={{ color: '#1D546D' }}>Paid Orders</p>
+                <p className="text-2xl font-bold mt-2" style={{ color: '#5F9598' }}>
                   {orders.filter(o => o.payment === 'Paid').length}
                 </p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-500" />
+              <div className="p-3 rounded-full" style={{ backgroundColor: 'rgba(95, 149, 152, 0.1)' }}>
+                <CheckCircle className="h-6 w-6" style={{ color: '#5F9598' }} />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600 mb-1">Unpaid Orders</p>
-                <p className="text-2xl font-bold text-yellow-600">
+                <p className="text-sm font-medium" style={{ color: '#1D546D' }}>Unpaid Orders</p>
+                <p className="text-2xl font-bold mt-2" style={{ color: '#EAB308' }}>
                   {orders.filter(o => o.payment === 'Unpaid').length}
                 </p>
               </div>
-              <Clock className="h-8 w-8 text-yellow-500" />
+              <div className="p-3 rounded-full" style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)' }}>
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600 mb-1">Avg Order Value</p>
-                <p className="text-2xl font-bold text-black">
+                <p className="text-sm font-medium" style={{ color: '#1D546D' }}>Avg Order Value</p>
+                <p className="text-2xl font-bold mt-2" style={{ color: '#1D546D' }}>
                   KES {orders.length > 0 
                     ? Math.round(orders.reduce((sum, o) => sum + o.amount, 0) / orders.length).toLocaleString() 
                     : 0}
                 </p>
               </div>
-              <TrendingUp className="h-8 w-8 text-purple-500" />
+              <div className="p-3 rounded-full" style={{ backgroundColor: 'rgba(29, 84, 109, 0.1)' }}>
+                <TrendingUp className="h-6 w-6" style={{ color: '#1D546D' }} />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 fade-in">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Search */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-black mb-2">Search Orders</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: '#1D546D' }}>Search Orders</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5" style={{ color: '#5F9598' }} />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search by Order ID, Customer or Item..."
-                  className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-black"
+                  className="w-full pl-10 pr-4 py-2 border-2 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                  style={{ 
+                    borderColor: '#F3F4F4',
+                    color: '#061E29',
+                    backgroundColor: '#F3F4F4'
+                  }}
                 />
               </div>
             </div>
 
             {/* Payment Filter */}
             <div>
-              <label className="block text-sm font-medium text-black mb-2">Payment Status</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: '#1D546D' }}>Payment Status</label>
               <select
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value)}
-                className="w-full p-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-black"
-                aria-label="Payment Status Filter"
+                className="w-full p-2 border-2 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style={{ 
+                  borderColor: '#F3F4F4',
+                  color: '#061E29',
+                  backgroundColor: '#F3F4F4'
+                }}
               >
                 {paymentStatuses.map(status => (
                   <option key={status} value={status}>
@@ -580,12 +640,16 @@ export default function PaymentsPage() {
 
             {/* Date Filter */}
             <div>
-              <label className="block text-sm font-medium text-black mb-2">Date Range</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: '#1D546D' }}>Date Range</label>
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full p-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-black"
-                aria-label="Date Range Filter"
+                className="w-full p-2 border-2 rounded-lg focus:outline-none focus:ring-2 transition-all"
+                style={{ 
+                  borderColor: '#F3F4F4',
+                  color: '#061E29',
+                  backgroundColor: '#F3F4F4'
+                }}
               >
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
@@ -597,32 +661,35 @@ export default function PaymentsPage() {
 
           {/* Active Filters */}
           {(searchTerm || paymentFilter !== 'all' || dateFilter !== 'all') && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: '#F3F4F4' }}>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-black">Active Filters:</span>
+                <span className="text-sm font-medium" style={{ color: '#1D546D' }}>Active Filters:</span>
                 {searchTerm && (
-                  <span className="bg-blue-100 text-black px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-blue-200">
+                  <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: '#061E29', color: '#F3F4F4' }}>
                     Search: "{searchTerm}"
-                    <button onClick={() => setSearchTerm('')} className="ml-1 hover:text-blue-900">×</button>
+                    <button onClick={() => setSearchTerm('')} className="ml-1 hover:opacity-80">×</button>
                   </span>
                 )}
                 {paymentFilter !== 'all' && (
-                  <span className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 border ${
-                    paymentFilter === 'Paid' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                  <span className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 ${
+                    paymentFilter === 'Paid' 
+                      ? 'bg-green-100 text-green-800 border-green-200' 
+                      : 'bg-yellow-100 text-yellow-800 border-yellow-200'
                   }`}>
                     Status: {paymentFilter}
-                    <button onClick={() => setPaymentFilter('all')} className="ml-1 hover:text-opacity-75">×</button>
+                    <button onClick={() => setPaymentFilter('all')} className="ml-1 hover:opacity-80">×</button>
                   </span>
                 )}
                 {dateFilter !== 'all' && (
-                  <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-purple-200">
+                  <span className="px-3 py-1 rounded-full text-sm flex items-center gap-1" style={{ backgroundColor: '#5F9598', color: '#F3F4F4' }}>
                     Date: {dateFilter}
-                    <button onClick={() => setDateFilter('all')} className="ml-1 hover:text-purple-900">×</button>
+                    <button onClick={() => setDateFilter('all')} className="ml-1 hover:opacity-80">×</button>
                   </span>
                 )}
                 <button 
                   onClick={clearFilters}
-                  className="text-sm text-red-600 hover:text-red-800 ml-2 font-medium flex items-center gap-1"
+                  className="text-sm ml-2 font-medium hover:underline flex items-center gap-1"
+                  style={{ color: '#061E29' }}
                 >
                   <X className="h-4 w-4" />
                   Clear All
@@ -633,54 +700,74 @@ export default function PaymentsPage() {
         </div>
         
         {/* Orders/Payments Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden border fade-in" style={{ borderColor: '#F3F4F4' }}>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead style={{ backgroundColor: '#061E29' }}>
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80"
+                      style={{ color: '#F3F4F4' }}
+                      onClick={() => handleSort('orderId')}>
                     <div className="flex items-center gap-2">
                       <Hash className="h-4 w-4" />
                       Order ID
+                      {sortField === 'orderId' && (
+                        <ArrowUpDown className="h-3 w-3" />
+                      )}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80"
+                      style={{ color: '#F3F4F4' }}
+                      onClick={() => handleSort('customerName')}>
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4" />
                       Customer
+                      {sortField === 'customerName' && (
+                        <ArrowUpDown className="h-3 w-3" />
+                      )}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#F3F4F4' }}>
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4" />
                       Item
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#F3F4F4' }}>
                     Qty
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80"
+                      style={{ color: '#F3F4F4' }}
+                      onClick={() => handleSort('amount')}>
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
                       Amount
+                      {sortField === 'amount' && (
+                        <ArrowUpDown className="h-3 w-3" />
+                      )}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#F3F4F4' }}>
                     <div className="flex items-center gap-2">
                       <CreditCard className="h-4 w-4" />
                       Payment
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#F3F4F4' }}>
                     Status
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80"
+                      style={{ color: '#F3F4F4' }}
+                      onClick={() => handleSort('createdAt')}>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       Date
+                      {sortField === 'createdAt' && (
+                        <ArrowUpDown className="h-3 w-3" />
+                      )}
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#F3F4F4' }}>
                     Actions
                   </th>
                 </tr>
@@ -689,9 +776,9 @@ export default function PaymentsPage() {
                 {filteredOrders.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-12 text-center">
-                      <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-black font-medium">No orders found</p>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <CreditCard className="h-12 w-12 mx-auto mb-3" style={{ color: '#1D546D', opacity: 0.5 }} />
+                      <p className="font-medium" style={{ color: '#061E29' }}>No orders found</p>
+                      <p className="text-sm mt-1" style={{ color: '#1D546D' }}>
                         {orders.length > 0 
                           ? 'No orders match your filters' 
                           : 'No orders available'}
@@ -708,25 +795,25 @@ export default function PaymentsPage() {
                       onClick={() => setSelectedOrder(order)}
                     >
                       <td className="px-6 py-4">
-                        <span className="font-medium text-black">#{order.orderId}</span>
+                        <span className="font-medium" style={{ color: '#061E29' }}>#{order.orderId}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <div className="font-medium text-black">{order.customerName}</div>
-                          <div className="text-xs text-gray-500">{order.customerId?.slice(0, 8)}...</div>
+                          <div className="font-medium" style={{ color: '#061E29' }}>{order.customerName}</div>
+                          <div className="text-xs" style={{ color: '#1D546D' }}>{order.customerId?.slice(0, 8)}...</div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <div className="text-black">{order.item}</div>
+                          <div style={{ color: '#061E29' }}>{order.item}</div>
                           {order.price && (
-                            <div className="text-xs text-gray-500">@ KES {order.price}</div>
+                            <div className="text-xs" style={{ color: '#1D546D' }}>@ KES {order.price}</div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-black">{order.quantity}</td>
+                      <td className="px-6 py-4" style={{ color: '#061E29' }}>{order.quantity}</td>
                       <td className="px-6 py-4">
-                        <span className="font-bold text-black">KES {order.amount.toLocaleString()}</span>
+                        <span className="font-bold" style={{ color: '#5F9598' }}>KES {order.amount.toLocaleString()}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPaymentStatusColor(order.payment)}`}>
@@ -742,7 +829,7 @@ export default function PaymentsPage() {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-black text-sm">
+                      <td className="px-6 py-4 text-sm" style={{ color: '#1D546D' }}>
                         {formatDate(order.createdAt)}
                       </td>
                       <td className="px-6 py-4">
@@ -754,7 +841,8 @@ export default function PaymentsPage() {
                                   e.stopPropagation();
                                   handleInitiateMpesaPayment(order);
                                 }}
-                                className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1 text-sm"
+                                className="font-medium flex items-center gap-1 text-sm transition-all duration-200 hover:scale-105"
+                                style={{ color: '#5F9598' }}
                               >
                                 <Smartphone className="h-4 w-4" />
                                 M-PESA
@@ -764,7 +852,8 @@ export default function PaymentsPage() {
                                   e.stopPropagation();
                                   handleMarkAsPaid(order);
                                 }}
-                                className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 text-sm"
+                                className="font-medium flex items-center gap-1 text-sm transition-all duration-200 hover:scale-105"
+                                style={{ color: '#1D546D' }}
                               >
                                 <CheckCircle className="h-4 w-4" />
                                 Mark Paid
@@ -776,7 +865,8 @@ export default function PaymentsPage() {
                               e.stopPropagation();
                               handlePrintReceipt(order);
                             }}
-                            className="text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 text-sm"
+                            className="font-medium flex items-center gap-1 text-sm transition-all duration-200 hover:scale-105"
+                            style={{ color: '#061E29' }}
                           >
                             <Printer className="h-4 w-4" />
                             Print
@@ -792,11 +882,11 @@ export default function PaymentsPage() {
         </div>
 
         {/* Footer with Export and Summary */}
-        <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-sm text-black">
+        <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 fade-in">
+          <div className="text-sm" style={{ color: '#1D546D' }}>
             Showing {filteredOrders.length} of {orders.length} orders
             {pendingRevenue > 0 && (
-              <span className="ml-2 text-yellow-600 font-medium">
+              <span className="ml-2 font-medium" style={{ color: '#EAB308' }}>
                 (KES {pendingRevenue.toLocaleString()} pending)
               </span>
             )}
@@ -804,15 +894,17 @@ export default function PaymentsPage() {
           <div className="flex gap-3">
             <button
               onClick={clearFilters}
-              className="px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium flex items-center gap-2 text-black"
+              className="px-4 py-2 border-2 rounded-lg transition-all duration-200 hover:opacity-80 font-medium flex items-center gap-2"
+              style={{ borderColor: '#F3F4F4', color: '#1D546D' }}
             >
               <Filter className="h-4 w-4" />
               Reset Filters
             </button>
             <button
               onClick={handleExportCSV}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2 shadow-sm"
               disabled={filteredOrders.length === 0}
+              className="px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg"
+              style={{ backgroundColor: '#061E29', color: '#F3F4F4' }}
             >
               <Download className="h-4 w-4" />
               Export CSV
