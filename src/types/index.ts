@@ -89,6 +89,7 @@ export interface InventoryItem {
 export type InventoryTransactionType = 'restock' | 'sale' | 'adjustment' | 'return' | 'damage' | 'transfer';
 
 export interface InventoryTransaction {
+  price: number;
   id: string;
   itemId: string;
   itemName: string;

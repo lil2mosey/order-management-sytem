@@ -240,7 +240,8 @@ export default function InventoryPage() {
         referenceType: 'manual',
         notes: 'Initial stock addition',
         createdBy: 'system',
-        createdAt: new Date()
+        createdAt: new Date(),
+        price: 0
       };
 
       await addDoc(collection(db, 'inventoryTransactions'), transaction);
@@ -309,7 +310,8 @@ export default function InventoryPage() {
         referenceType: 'manual',
         notes: `Manual ${updateType}${updateType === 'restock' ? ` of ${quantityDiff} units` : ''}`,
         createdBy: 'system',
-        createdAt: new Date()
+        createdAt: new Date(),
+        price: 0
       };
 
       await addDoc(collection(db, 'inventoryTransactions'), transaction);
@@ -435,7 +437,8 @@ export default function InventoryPage() {
           referenceType: 'manual',
           notes: 'Bulk restock of low items',
           createdBy: 'system',
-          createdAt: new Date()
+          createdAt: new Date(),
+          price: 0
         };
 
         await addDoc(collection(db, 'inventoryTransactions'), transaction);

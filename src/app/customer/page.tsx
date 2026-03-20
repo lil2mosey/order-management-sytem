@@ -559,7 +559,7 @@ export default function CustomerDashboard() {
                           <span 
                             className="px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1 mb-2"
                             style={{ 
-                              backgroundColor: order.status === 'Completed' || order.status === 'Done' 
+                              backgroundColor: order.status === 'Completed'
                                 ? '#5F9598' 
                                 : order.status === 'Pending' 
                                   ? '#EAB308' 

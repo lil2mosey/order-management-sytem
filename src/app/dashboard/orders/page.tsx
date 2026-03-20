@@ -1,12 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, addDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Order } from '@/types';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { 
+  ShoppingBag, 
+  Edit, 
+  CheckCircle, 
+  Clock, 
+  DollarSign,
+  User,
+  Package,
+  X
+} from 'lucide-react';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -21,7 +31,11 @@ export default function OrdersPage() {
 
   const fetchOrders = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, 'orders'));
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(ordersQuery);
       const ordersData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -29,6 +43,7 @@ export default function OrdersPage() {
       setOrders(ordersData);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast.error('Failed to load orders');
     } finally {
       setLoading(false);
     }
@@ -43,16 +58,20 @@ export default function OrdersPage() {
     if (!selectedOrder) return;
     
     try {
-      await updateDoc(doc(db, 'orders', selectedOrder.id), {
+      const updateData: Partial<Order> = {
         status: selectedOrder.status,
-        payment: selectedOrder.payment,
         customerName: selectedOrder.customerName
-      });
+      };
+      
+  
+      
+      await updateDoc(doc(db, 'orders', selectedOrder.id), updateData);
       
       toast.success('Order updated successfully');
       setShowModal(false);
       fetchOrders();
     } catch (error) {
+      console.error('Error updating order:', error);
       toast.error('Error updating order');
     }
   };
@@ -65,138 +84,184 @@ export default function OrdersPage() {
       toast.success('Order marked as completed');
       fetchOrders();
     } catch (error) {
+      console.error('Error updating order:', error);
       toast.error('Error updating order');
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case 'Done':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'Pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getPaymentColor = (payment: string) => {
+    switch(payment) {
+      case 'Paid':
+        return 'text-green-600 font-bold';
+      case 'Unpaid':
+        return 'text-red-600 font-bold';
+      default:
+        return 'text-gray-600';
+    }
+  };
+
+
+
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Order Management</h1>
-        <button 
-          onClick={() => window.location.href = '/dashboard/orders/new'}
-          className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900"
-        >
-          New Order
-        </button>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-gray-900">{order.orderId}</td>
-                <td className="px-6 py-4 text-gray-900">{order.customerName}</td>
-                <td className="px-6 py-4 text-gray-900">{order.item}</td>
-                <td className="px-6 py-4 text-gray-900">{order.quantity}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                    order.status === 'Done' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {order.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={order.payment === 'Paid' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                    {order.payment}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <button 
-                    onClick={() => handleEdit(order)}
-                    className="text-blue-600 hover:text-blue-900 mr-3"
-                  >
-                    Edit
-                  </button>
-                  <button 
-                    onClick={() => handleQuickComplete(order)}
-                    className="text-green-600 hover:text-green-900"
-                  >
-                    Complete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="min-h-screen py-8" style={{ backgroundColor: '#F3F4F4' }}>
+      <div className="container mx-auto px-4 max-w-7xl">
+        {/* Header */}
+        <div className="mb-8 fade-in">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-3 rounded-lg" style={{ backgroundColor: '#061E29' }}>
+                <ShoppingBag className="h-6 w-6" style={{ color: '#F3F4F4' }} />
+              </div>
+              <h1 className="text-3xl font-bold" style={{ color: '#061E29' }}>Order Management</h1>
+            </div>
+            <button 
+              onClick={() => window.location.href = '/dashboard/orders/new'}
+              className="px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:opacity-90"
+              style={{ backgroundColor: '#5F9598', color: '#F3F4F4' }}
+            >
+              + New Order
+            </button>
+          </div>
+          <p className="text-lg ml-14" style={{ color: '#1D546D' }}>
+            Manage and track customer orders
+          </p>
+        </div>
 
-      {/* Edit Modal */}
-      {showModal && selectedOrder && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-96">
-            <h3 className="text-xl font-bold mb-4 text-gray-700">Edit Order</h3>
-            
-            <div className="mb-4 text-gray-700">
-              <label className="block text-sm font-medium mb-2 text-gray-700">Customer Name</label>
-              <input
-                type="text"
-                aria-label="Customer name text-gray-700"
-                value={selectedOrder.customerName}
-                onChange={(e) => setSelectedOrder({...selectedOrder, customerName: e.target.value})}
-                className="w-full p-2 border rounded text-gray-700"
-              />
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 fade-in">
+          
+          
+
+       
+          </div>
+
+         
+
+          
+        </div>
+      
+        {/* Orders Table */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden fade-in">
+          {orders.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="h-12 w-12 mx-auto mb-3" style={{ color: '#1D546D', opacity: 0.5 }} />
+              <p className="font-medium" style={{ color: '#061E29' }}>No orders found</p>
+              <p className="text-sm mt-1" style={{ color: '#1D546D' }}>
+                Click "New Order" to create your first order
+              </p>
             </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2 text-gray-700">Status</label>
-              <select
-                aria-label="Order status"
-                value={selectedOrder.status}
-                onChange={(e) => setSelectedOrder({...selectedOrder, status: e.target.value as 'Pending' | 'Done'})}
-                className="w-full p-2 border rounded text-gray-700"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Done">Done</option>
-              </select>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="border-b" style={{ backgroundColor: '#F9FAFB', borderColor: '#F3F4F4' }}>
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Order ID
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Customer
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Item
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Quantity
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Payment
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider" style={{ color: '#1D546D' }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                
+              </table>
             </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2 text-gray-700">Payment</label>
-              <select
-                aria-label="Order payment status"
-                value={selectedOrder.payment}
-                onChange={(e) => setSelectedOrder({...selectedOrder, payment: e.target.value as 'Paid' | 'Unpaid'})}
-                className="w-full p-2 border rounded text-gray-700"
-              >
-                <option value="Paid text-gray-900">Paid</option>
-                <option value="Unpaid text-gray-900">Unpaid</option>
-              </select>
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="flex-1 bg-gray-800 text-white py-2 rounded hover:bg-gray-700"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-800 py-2 rounded hover:bg-gray-700"
-              >
-                Cancel
-              </button>
+          )}
+        </div>
+
+        {/* Edit Modal */}
+        {showModal && selectedOrder && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+              <div className="p-6 border-b" style={{ borderColor: '#F3F4F4' }}>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-bold" style={{ color: '#061E29' }}>Edit Order</h3>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="p-1 rounded hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="h-5 w-5" style={{ color: '#1D546D' }} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#1D546D' }}>
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedOrder.customerName}
+                    onChange={(e) => setSelectedOrder({...selectedOrder, customerName: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-all"
+                    style={{ 
+                      borderColor: '#F3F4F4',
+                      color: '#061E29',
+                      backgroundColor: '#F3F4F4'
+                    }}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#1D546D' }}>
+                    Status
+                  </label>
+               
+                    
+                </div>
+                
+                
+              </div>
+              
+              <div className="p-6 border-t flex gap-3" style={{ borderColor: '#F3F4F4' }}>
+                <button
+                  onClick={handleSave}
+                  className="flex-1 py-2 rounded-lg font-semibold transition-all duration-200 hover:opacity-90"
+                  style={{ backgroundColor: '#5F9598', color: '#F3F4F4' }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 py-2 rounded-lg font-semibold transition-all duration-200 hover:opacity-80"
+                  style={{ backgroundColor: '#F3F4F4', color: '#1D546D' }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    
   );
 }

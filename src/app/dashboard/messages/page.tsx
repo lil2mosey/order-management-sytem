@@ -266,11 +266,7 @@ export default function MessagesPage() {
                         </p>
                         <div className="flex items-center gap-2 text-xs" style={{ color: '#5F9598' }}>
                           <Clock className="h-3 w-3" />
-                          <span>
-                            {message.createdAt?.toDate 
-                              ? message.createdAt.toDate().toLocaleString()
-                              : new Date(message.createdAt).toLocaleString()}
-                          </span>
+              
                         </div>
                         {message.reply && (
                           <div className="mt-2 p-2 rounded-lg" style={{ backgroundColor: '#F3F4F4' }}>
@@ -304,11 +300,7 @@ export default function MessagesPage() {
                   <p className="italic" style={{ color: '#1D546D' }}>"{selectedMessage.message}"</p>
                   <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: '#5F9598' }}>
                     <Clock className="h-3 w-3" />
-                    <span>
-                      {selectedMessage.createdAt?.toDate 
-                        ? selectedMessage.createdAt.toDate().toLocaleString()
-                        : new Date(selectedMessage.createdAt).toLocaleString()}
-                    </span>
+          
                   </div>
                 </div>
                 

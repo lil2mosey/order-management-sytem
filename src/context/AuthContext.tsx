@@ -21,7 +21,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
   signIn: (email: string, password: string) => Promise<any>;
   logout: () => Promise<void>;
-  processPaymentAndDeductStock: (orderData: any, paymentMethod: string, transactionCode?: string) => Promise<void>;
+  processPaymentAndDeductStock: (orderData: any, paymentMethod: string, transactionCode?: string) => Promise<string>; // Changed to Promise<string>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     orderData: any, 
     paymentMethod: string, 
     transactionCode?: string
-  ) => {
+  ): Promise<string> => {
     if (!user) {
       toast.error('Please login to continue');
       throw new Error('User not authenticated');
@@ -233,7 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updatedAt: new Date()
       });
 
-      // Create inventory transaction log
+      // Create inventory transaction log with all required fields
       const transactionRef = doc(db, 'inventoryTransactions', `${orderId}_tx`);
       const inventoryTransaction: InventoryTransaction = {
         id: `${orderId}_tx`,
@@ -241,6 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         itemName: orderData.productName,
         type: 'sale',
         quantity: -orderData.quantity, // Negative for sale
+        price: orderData.price, // Add the price per unit
         previousQuantity: currentQuantity,
         newQuantity: newQuantity,
         referenceId: orderId,
@@ -274,6 +275,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await batch.commit();
       
       toast.success('Payment processed and stock updated successfully!');
+      
+      return orderId; // Return order ID for redirection if needed
       
     } catch (error: any) {
       console.error('Error processing payment:', error);

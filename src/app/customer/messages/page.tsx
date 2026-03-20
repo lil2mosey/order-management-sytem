@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { Message } from '@/types';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import Link from 'next/link';
-import { MessageSquare, Send, Clock, CheckCircle, ArrowLeft, User, Mail } from 'lucide-react';
+import { MessageSquare, Send, Clock, CheckCircle, ArrowLeft, User, Mail, ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function CustomerMessagesPage() {
